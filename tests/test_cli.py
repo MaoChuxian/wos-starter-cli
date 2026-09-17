@@ -1,6 +1,7 @@
 import json
 
 import httpx
+import pytest
 
 from wos_cli import cli
 from wos_cli.client import WosClient
@@ -209,6 +210,77 @@ def test_doctor_api_error_is_structured(monkeypatch, capsys, make_client, fx):
     assert code == 1
     checks = {c["id"]: c for c in env["checks"]}
     assert checks["api.documents"]["status"] == "fail"
+
+
+# -- argparse errors must be JSON, not text + SystemExit(2) -----------------
+def test_usage_error_no_command(capsys):
+    code, env = run(capsys, [])
+    assert code == 2
+    assert env["ok"] is False
+    assert env["error"]["code"] == "usage_error"
+    assert env["command"] is None
+
+
+def test_usage_error_unknown_command(capsys):
+    code, env = run(capsys, ["frobnicate"])
+    assert code == 2
+    assert env["error"]["code"] == "usage_error"
+    assert env["command"] == "frobnicate"
+
+
+def test_usage_error_missing_doi(capsys):
+    code, env = run(capsys, ["doi"])
+    assert code == 2
+    assert env["command"] == "doi"
+    assert env["error"]["code"] == "usage_error"
+
+
+def test_usage_error_unknown_option(capsys):
+    code, env = run(capsys, ["search", "x", "--nope"])
+    assert code == 2
+    assert env["command"] == "search"
+    assert env["error"]["code"] == "usage_error"
+
+
+def test_usage_error_invalid_sort(capsys):
+    code, env = run(capsys, ["search", "x", "--sort", "BAD"])
+    assert code == 2
+    assert env["command"] == "search"
+    assert env["error"]["code"] == "usage_error"
+
+
+def test_db_option_removed(capsys):
+    # --db was removed; db is fixed to WOS internally.
+    code, env = run(capsys, ["search", "x", "--db", "DRCI"])
+    assert code == 2
+    assert env["error"]["code"] == "usage_error"
+
+
+def test_search_sends_db_wos(monkeypatch, capsys, make_client, fx):
+    mock = make_client(search=fx("q_ts.json"))
+    patch_client(monkeypatch, mock)
+    code, env = run(capsys, ["search", "x"])
+    assert code == 0
+    assert mock.calls[0]["db"] == "WOS"
+
+
+def test_capabilities_database_is_wos(capsys):
+    _, env = run(capsys, ["capabilities"])
+    assert env["database"] == "WOS"
+
+
+def test_help_is_not_json(capsys):
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["--help"])
+    assert exc.value.code == 0
+    assert "usage" in capsys.readouterr().out.lower()
+
+
+def test_version_exits_zero(capsys):
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["--version"])
+    assert exc.value.code == 0
+    assert "wos" in capsys.readouterr().out.lower()
 
 
 def test_api_key_never_leaks_to_output(monkeypatch, capsys):

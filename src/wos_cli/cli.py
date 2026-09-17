@@ -36,6 +36,33 @@ from .query import (
 )
 
 API_NAME = "Web of Science Starter"
+# This CLI intentionally targets the Web of Science Core Collection only.
+DB = "WOS"
+KNOWN_COMMANDS = frozenset(
+    {"search", "doi", "get", "journal", "doctor", "smoke", "capabilities"}
+)
+
+
+class WosArgumentParser(argparse.ArgumentParser):
+    """ArgumentParser that raises instead of printing + SystemExit(2).
+
+    This lets :func:`main` route parse errors through the same JSON envelope as
+    every other error. ``--help``/``--version`` still use argparse's normal
+    ``SystemExit`` path.
+    """
+
+    def error(self, message: str) -> None:
+        raise WosUsageError(message)
+
+
+def _infer_command(argv: list[str]) -> str | None:
+    """Best-effort command name for the envelope when parsing fails."""
+    for token in argv:
+        if token in KNOWN_COMMANDS:
+            return token
+        if not token.startswith("-"):
+            return token
+    return None
 
 
 def _api_version() -> str:
@@ -103,7 +130,7 @@ def cmd_search(args: argparse.Namespace, client: Any) -> dict[str, Any]:
 
     while True:
         data = client.search(
-            query, db=args.db, limit=args.limit, page=page, sort_field=sort_field
+            query, db=DB, limit=args.limit, page=page, sort_field=sort_field
         )
         md = normalize_metadata(data.get("metadata")) or {}
         total = md.get("total")
@@ -139,7 +166,7 @@ def cmd_doi(args: argparse.Namespace, client: Any) -> dict[str, Any]:
     if not doi:
         raise WosUsageError("DOI must not be empty")
     query = build_doi_query(doi)
-    data = client.search(query, db="WOS", limit=5, page=1)
+    data = client.search(query, db=DB, limit=5, page=1)
     metadata = normalize_metadata(data.get("metadata"))
     records = [normalize_document(hit) for hit in (data.get("hits") or [])]
     warnings: list[str] = []
@@ -189,6 +216,7 @@ def cmd_capabilities(_: argparse.Namespace) -> dict[str, Any]:
         "capabilities",
         api=API_NAME,
         version=_api_version(),
+        database=DB,
         max_page_size=MAX_LIMIT,
         min_page_size=1,
         default_limit=DEFAULT_LIMIT,
@@ -292,7 +320,7 @@ def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--pretty", action="store_true", help="indent JSON output")
 
-    parser = argparse.ArgumentParser(
+    parser = WosArgumentParser(
         prog="wos", description="Agent-friendly CLI for the Web of Science Starter API"
     )
     parser.add_argument("--version", action="version", version=f"wos {__version__}")
@@ -301,7 +329,6 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("search", parents=[common], help="search documents")
     p.add_argument("query", nargs="?", help="plain terms (wrapped as TS=(...))")
     p.add_argument("--raw", metavar="QUERY", help="raw WoS advanced query (sent verbatim)")
-    p.add_argument("--db", default="WOS", help="database (default WOS)")
     p.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="1..50 (default 10)")
     p.add_argument("--page", type=int, default=1)
     p.add_argument("--sort", choices=SORT_FIELDS, default=None, help="LD|PY|RS|TC")
@@ -347,8 +374,19 @@ def dispatch(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
     parser = build_parser()
-    args = parser.parse_args(argv)
+    pretty = "--pretty" in argv
+
+    try:
+        args = parser.parse_args(argv)
+    except WosUsageError as exc:
+        # Parse errors are reported through the same JSON envelope as everything
+        # else. --help / --version still exit normally via SystemExit.
+        env = _envelope(_infer_command(argv), ok=False, error=exc.to_dict())
+        _emit(env, pretty)
+        return exc.exit_code
+
     pretty = getattr(args, "pretty", False)
     try:
         env = dispatch(args)

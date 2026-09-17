@@ -1,6 +1,6 @@
 ---
 name: wos
-description: Query the Web of Science Starter API with the `wos` command - search WoS documents with advanced field tags, look up a paper by DOI or WoS UID, check whether a journal is indexed (ISSN/ID), and read Times Cited counts. Use to verify whether a paper or journal is covered by Web of Science, to obtain authoritative WoS metadata and citation counts, for precise advanced WoS searches, or to cross-check candidates found by other search tools. Not for open-ended discovery, abstracts, full text, or PDFs.
+description: Query the Web of Science Starter API with the `wos` command - search WoS documents with advanced field tags, look up a paper by DOI or WoS UID, look up WoS Starter journal metadata by ISSN or journal ID, and read Times Cited counts. Use to verify whether a paper is covered by Web of Science, to obtain authoritative WoS metadata and citation counts, for precise advanced WoS searches, or to cross-check candidates found by other search tools. Not for open-ended discovery, abstracts, full text, or PDFs.
 ---
 
 # Web of Science (Starter) from the shell
@@ -21,6 +21,10 @@ wos doctor
 It reports `WOS_API_KEY: configured` (never the key) and checks the live endpoint.
 If the key is missing, ask the user to set `WOS_API_KEY` in their environment —
 never paste the key into chat.
+
+This CLI targets `db=WOS` (Web of Science Core Collection) only. A `journal` hit
+reports WoS Starter journal metadata; it is not a formal statement of current
+journal coverage or indexing status.
 
 ## Commands
 

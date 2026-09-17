@@ -50,7 +50,6 @@ wos capabilities
 
 | Option | Default | Notes |
 |---|---|---|
-| `--db` | `WOS` | database |
 | `--limit` | `10` | locally validated to 1..50 |
 | `--page` | `1` | |
 | `--sort` | none | `LD` \| `PY` \| `RS` \| `TC` |
@@ -154,6 +153,8 @@ Errors never contain the API key, request headers, or the full URL.
 
 ## Field-tag support
 
+This CLI currently targets `db=WOS` (Web of Science Core Collection) only.
+
 Starter declares **18** tags. On `db=WOS` this CLI supports **17**:
 
 ```
@@ -180,5 +181,5 @@ uv pip install --python .venv\Scripts\python.exe -e ".[dev]"
 .venv\Scripts\python.exe -m pytest
 ```
 
-Tests use `bench/raw/*.json` captured from the real API as fixtures plus `httpx.MockTransport`;
-no live calls and no key are required.
+Tests use sanitized fixtures in `tests/fixtures/`, derived from real Web of Science
+Starter API responses, plus `httpx.MockTransport`; no live calls and no key are required.

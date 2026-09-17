@@ -13,6 +13,7 @@ from typing import Any, Callable
 
 import httpx
 
+from . import __version__
 from .errors import (
     WosConfigError,
     WosNetworkError,
@@ -22,7 +23,45 @@ from .errors import (
 
 RETRYABLE_STATUS = frozenset({408, 429, 500, 502, 503, 504})
 DEFAULT_BASE_URL = "https://api.clarivate.com/apis/wos-starter"
-USER_AGENT = "wos-cli/0.1 (+https://github.com/)"
+USER_AGENT = f"wos-cli/{__version__} (+https://github.com/MaoChuxian/wos-starter-cli)"
+
+
+def _require_object(data: Any, what: str) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        raise WosResponseError(f"{what}: expected a JSON object, got {type(data).__name__}")
+    return data
+
+
+def _validate_documents_list(data: Any) -> dict[str, Any]:
+    data = _require_object(data, "documents search")
+    if not isinstance(data.get("metadata"), dict):
+        raise WosResponseError("documents search: 'metadata' is missing or not an object")
+    if not isinstance(data.get("hits"), list):
+        raise WosResponseError("documents search: 'hits' is missing or not a list")
+    return data
+
+
+def _validate_document(data: Any) -> dict[str, Any]:
+    data = _require_object(data, "document lookup")
+    if not data.get("uid"):
+        raise WosResponseError("document lookup: 'uid' is missing")
+    return data
+
+
+def _validate_journals_list(data: Any) -> dict[str, Any]:
+    data = _require_object(data, "journals search")
+    if not isinstance(data.get("metadata"), dict):
+        raise WosResponseError("journals search: 'metadata' is missing or not an object")
+    if not isinstance(data.get("hits"), list):
+        raise WosResponseError("journals search: 'hits' is missing or not a list")
+    return data
+
+
+def _validate_journal(data: Any) -> dict[str, Any]:
+    data = _require_object(data, "journal lookup")
+    if not (data.get("id") or data.get("name")):
+        raise WosResponseError("journal lookup: neither 'id' nor 'name' is present")
+    return data
 
 
 def get_api_key() -> str:
@@ -158,16 +197,16 @@ class WosClient:
             "page": page,
             "sortField": sort_field,
         }
-        return self._request("documents", params)
+        return _validate_documents_list(self._request("documents", params))
 
     def get_document(self, uid: str) -> dict[str, Any]:
-        return self._request(f"documents/{self._path_segment(uid)}")
+        return _validate_document(self._request(f"documents/{self._path_segment(uid)}"))
 
     def get_journal_by_issn(self, issn: str) -> dict[str, Any]:
-        return self._request("journals", {"issn": issn})
+        return _validate_journals_list(self._request("journals", {"issn": issn}))
 
     def get_journal_by_id(self, journal_id: str) -> dict[str, Any]:
-        return self._request(f"journals/{self._path_segment(journal_id)}")
+        return _validate_journal(self._request(f"journals/{self._path_segment(journal_id)}"))
 
 
 def build_client(version: str = "v1", **kwargs: Any) -> WosClient:

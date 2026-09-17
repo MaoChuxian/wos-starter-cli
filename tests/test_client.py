@@ -9,6 +9,7 @@ from wos_cli.errors import (
     WosNetworkError,
     WosNotFoundError,
     WosRateLimitError,
+    WosResponseError,
     WosServerError,
 )
 
@@ -205,3 +206,53 @@ def test_key_never_in_client_repr():
     client = WosClient(KEY, transport=transport, min_interval=0.0, sleeper=lambda _s: None)
     assert KEY not in repr(client)
     assert KEY not in str(client)
+
+
+# -- schema validation: HTTP 200 with an unexpected body --------------------
+def _client_returning(payload):
+    def handler(request):
+        return httpx.Response(200, json=payload)
+
+    return make_client(handler)
+
+
+def test_search_200_list_body_raises_unexpected_response():
+    with pytest.raises(WosResponseError) as exc:
+        _client_returning([]).search("TS=(x)")
+    assert exc.value.code == "unexpected_response"
+
+
+def test_search_200_empty_object_raises():
+    with pytest.raises(WosResponseError):
+        _client_returning({}).search("TS=(x)")
+
+
+def test_search_hits_not_a_list_raises():
+    with pytest.raises(WosResponseError):
+        _client_returning({"metadata": {"total": 1}, "hits": {}}).search("TS=(x)")
+
+
+def test_search_metadata_not_object_raises():
+    with pytest.raises(WosResponseError):
+        _client_returning({"metadata": [], "hits": []}).search("TS=(x)")
+
+
+def test_get_document_missing_uid_raises():
+    with pytest.raises(WosResponseError):
+        _client_returning({"title": "no uid here"}).get_document("WOS:X")
+
+
+def test_journals_search_bad_structure_raises():
+    with pytest.raises(WosResponseError):
+        _client_returning({"hits": []}).get_journal_by_issn("0028-0836")
+
+
+def test_journal_lookup_bad_structure_raises():
+    with pytest.raises(WosResponseError):
+        _client_returning({"unexpected": True}).get_journal_by_id("NATURE-2025")
+
+
+def test_valid_payloads_still_pass():
+    assert _client_returning({"metadata": {"total": 0}, "hits": []}).search("TS=(x)")
+    assert _client_returning({"uid": "WOS:1"}).get_document("WOS:1")
+    assert _client_returning({"id": "NATURE-2025"}).get_journal_by_id("NATURE-2025")

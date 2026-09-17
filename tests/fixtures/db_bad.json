@@ -1,0 +1,1 @@
+{"error":{"status":400,"title":"Invalid syntax for the request","details":"The value 'NOPE' is not valid for the selected filter 'db'. Allowed databases: BCI,BIOABS,BIOSIS,CCC,DIIDW,DRCI,MEDLINE,PPRN,RC,SCIELO,WOK,WOS,ZOOREC"}}

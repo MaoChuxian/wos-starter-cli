@@ -1,0 +1,1 @@
+{"error":{"status":400,"title":"Invalid syntax for the request","details":"The 'issn' query parameter is mandatory."}}
